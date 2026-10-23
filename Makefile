@@ -1,4 +1,4 @@
-machine ?= docker
+machine ?= podman
 
 %-up:
 	$(machine) compose --profile $* up -d
