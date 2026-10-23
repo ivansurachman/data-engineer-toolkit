@@ -132,9 +132,13 @@ try:
 
     step = log_step_start("06 - Standardize data types")
 
-    orders_df = orders_df.withColumn(
-        "order_date",
-        to_timestamp(col("order_date"), "yyyy-MM-dd HH:mm:ss")
+    orders_df = (
+        orders_df
+        .withColumn(
+            "order_date",
+            to_timestamp(col("order_date"), "yyyy-MM-dd HH:mm:ss")
+        )
+        .withColumnRenamed("order_date", "order_datetime")
     )
 
     items_df = (
@@ -157,7 +161,7 @@ try:
 
     orders_df = orders_df.filter(
         col("order_id").isNotNull() &
-        col("order_date").isNotNull()
+        col("order_datetime").isNotNull()
     )
 
     orders_after = orders_df.count()

@@ -2,53 +2,51 @@
 
 ## Overview
 
-This project implements a batch data processing pipeline using **Apache Spark (PySpark)** and **Apache Airflow**. The pipeline reads order and order item data from CSV files, performs data cleaning and validation, joins the datasets, calculates Gross Merchandise Value (GMV), and stores the transformed data in Parquet format.
+This project implements a batch ETL pipeline using **Apache Spark (PySpark)** and **Apache Airflow**. It reads order and order-item data from CSV files, cleans and validates the data, joins both datasets, calculates Gross Merchandise Value (GMV) after discounts, and writes the transformed result in Parquet format.
 
-The project also includes process-level logging to improve traceability, making it easier to monitor execution progress, measure processing duration, identify failures, and validate output data.
+The pipeline also includes stage-level logging to improve traceability. Logs help track processing progress, measure execution duration, inspect data quality, and diagnose failures through Airflow.
 
 ## Objectives
 
 - Build a batch ETL pipeline using PySpark.
 - Read and process multiple CSV datasets.
-- Clean and validate data before transformation.
-- Join order data with order item data.
+- Clean and validate records before transformation.
+- Join order and order-item datasets using `order_id`.
 - Calculate GMV after discounts.
 - Store transformed data in Parquet format.
-- Integrate data processing with Apache Airflow.
-- Add logging to monitor each processing stage.
+- Orchestrate the pipeline with Apache Airflow.
+- Log processing stages, durations, row counts, and errors.
 - Validate the generated output.
 
 ## Tech Stack
 
 | Technology | Purpose |
 |---|---|
-| Python | ETL implementation and file operations |
-| Apache Spark / PySpark | Distributed data processing |
+| Python | ETL logic and file operations |
+| Apache Spark / PySpark | Batch data processing |
 | Apache Airflow | Workflow orchestration and task monitoring |
 | CSV | Input data format |
 | Apache Parquet | Output columnar storage format |
-| Podman Compose | Container and service orchestration |
+| Docker Compose / Podman Compose | Container and service orchestration |
 
 ## Project Workflow
 
 ```text
 orders.csv ─────────┐
-                    │
                     ├──> Read CSV Files
-                    │
 order_items.csv ────┘
                            |
                            v
-                    Data Cleaning
+                     Data Cleaning
                            |
                            v
-                  Data Type Standardization
+                Data Type Standardization
                            |
                            v
                     Data Validation
                            |
                            v
-                 Join Using order_id
+                Join using order_id
                            |
                            v
                     Calculate GMV
@@ -57,69 +55,63 @@ order_items.csv ────┘
                   Write Parquet Output
                            |
                            v
-                    Validate Output
+                   Validate Output
                            |
                            v
-                Copy Output to Airflow Data
+             Copy Output to Airflow Data
 ```
 
 ## Input Data
 
-The pipeline processes two CSV datasets.
+The pipeline processes two CSV files.
 
 ### 1. `orders.csv`
 
-Contains order-level information, including the order identifier, order date, payment method, and order status.
-
-The `internal_notes` column is removed because it is not required for the transformation.
+Contains order-level information, including the order identifier, order date, payment method, and order status. The `internal_notes` column is removed because it is not required for this transformation.
 
 ### 2. `order_items.csv`
 
-Contains order item information, including product category, quantity, price, and discount rate.
+Contains order-item information, including product category, quantity, price, and discount rate.
 
-The datasets are joined using the `order_id` column.
-
-> The exact input schema depends on the source CSV files.
+The datasets are joined using `order_id`. The exact input schema depends on the supplied CSV files.
 
 ## Data Processing
 
 ### 1. Read CSV Files
 
-The pipeline reads both CSV files using PySpark with headers enabled and automatic schema inference disabled.
+PySpark reads both CSV files with headers enabled and automatic schema inference disabled.
 
 ### 2. Data Cleaning
 
-Missing values are handled using default values.
+Missing values are filled with default values:
 
 | Dataset | Column | Default Value |
 |---|---|---|
 | Orders | `payment_method` | `UNKNOWN` |
 | Orders | `order_status` | `UNKNOWN` |
-| Order Items | `product_category` | `UNKNOWN` |
-| Order Items | `quantity` | `0` |
-| Order Items | `price` | `0` |
-| Order Items | `discount_rate` | `0` |
+| Order items | `product_category` | `UNKNOWN` |
+| Order items | `quantity` | `0` |
+| Order items | `price` | `0` |
+| Order items | `discount_rate` | `0` |
 
 The `internal_notes` column is removed from the orders dataset.
 
 ### 3. Data Type Standardization
 
-The pipeline converts columns to appropriate data types:
-
-- `order_date` to timestamp.
-- `quantity` to integer.
-- `price` to double.
-- `discount_rate` to double.
+- `order_date` is converted to a timestamp.
+- `quantity` is converted to an integer.
+- `price` is converted to a double.
+- `discount_rate` is converted to a double.
 
 ### 4. Data Validation
 
-The pipeline filters invalid records before joining the datasets.
+Invalid records are filtered out before the join.
 
-**Orders validation:**
+**Orders validation**
 - `order_id` must not be null.
-- `order_date` must be a valid timestamp and must not be null.
+- `order_date` must parse successfully and must not be null.
 
-**Order items validation:**
+**Order-items validation**
 - `order_id` must not be null.
 - `quantity` must not be null and must be greater than zero.
 - `price` must not be null and must be greater than or equal to zero.
@@ -127,13 +119,11 @@ The pipeline filters invalid records before joining the datasets.
 
 ### 5. Data Joining
 
-The two datasets are joined using an **inner join** on `order_id`. Only matching records from both datasets are retained.
+The datasets are joined with an **inner join** on `order_id`. Only records with matching order identifiers are retained.
 
 ### 6. GMV Calculation
 
-The pipeline creates a new column named `gmv` to calculate the item value after discount.
-
-Formula:
+The pipeline creates a `gmv` column to calculate the item value after discount:
 
 \[
 \text{GMV} = \text{quantity} \times \text{price} \times (1 - \text{discount\_rate})
@@ -143,23 +133,23 @@ The result is rounded to two decimal places.
 
 ## Output
 
-The transformed dataset is written in Apache Parquet format.
+The transformed dataset is written in Parquet format.
 
-**Primary output path:**
+**Primary output path inside the containers:**
 
 ```text
 /opt/airflow/parquet_output/orders_joined_parquet
 ```
 
-**Secondary output path:**
+**Output path inside the Airflow container:**
 
 ```text
 /opt/airflow/data/output/orders_joined_parquet
 ```
 
-The primary output is written by Spark. The pipeline then reads the Parquet output again to validate the resulting row count and schema before copying the generated files to the secondary directory.
+The secondary output corresponds to the project’s `airflow/data/output` directory when that directory is mounted as configured in Compose.
 
-Typical Parquet output files include:
+A typical output directory contains Parquet part files and a `_SUCCESS` marker:
 
 ```text
 orders_joined_parquet/
@@ -171,322 +161,226 @@ The number and names of part files depend on Spark execution and partitioning.
 
 ## Logging and Traceability
 
-The pipeline uses Python's `logging` module to record execution progress.
+The pipeline uses Python's `logging` module to record execution progress. Logs can include:
 
-The logs include:
-
-- Start and successful completion of processing stages.
+- Start and successful completion of each processing stage.
 - Execution duration for each stage.
 - Input column names.
-- Row counts before and after data validation.
+- Row counts before and after validation.
 - Spark application ID.
-- Output location and number of copied files.
-- Error messages and stack traces when an exception occurs.
+- Output path and number of copied files.
+- Error messages and stack traces when a failure occurs.
 
-Example log format:
+Example log format (illustrative only):
 
 ```text
-2026-10-23 08:30:01 | INFO | START | 02 - Read orders.csv
-2026-10-23 08:30:03 | INFO | SUCCESS | 02 - Read orders.csv | duration=2.15 seconds
-2026-10-23 08:30:05 | INFO | START | 07 - Validate orders data
-2026-10-23 08:30:08 | INFO | SUCCESS | 07 - Validate orders data | duration=3.20 seconds
+2026-10-23 08:30:01 | INFO | START | Read orders.csv
+2026-10-23 08:30:03 | INFO | SUCCESS | Read orders.csv | duration=2.15 seconds
+2026-10-23 08:30:05 | INFO | START | Validate orders data
+2026-10-23 08:30:08 | INFO | SUCCESS | Validate orders data | duration=3.20 seconds
 2026-10-23 08:30:14 | INFO | PIPELINE SUCCESS | TransformOrders completed
 ```
 
-The timestamps and durations above are illustrative examples, not actual benchmark results.
+The timestamps and durations above are examples, not measured benchmark results. When the script is run through Airflow, inspect the task logs in the Airflow UI.
 
-When the script is executed through an Airflow task, its logs can be inspected through the Airflow UI, provided that the task execution setup captures the Spark process output.
+## Run the Project
 
-## Apache Airflow Integration
+### Prerequisites
 
-The pipeline is orchestrated through an Airflow DAG named:
+- Docker with Docker Compose, or Podman with a compatible Compose provider.
+- Git.
+- The project repository and required input CSV files.
 
-```text
-orders_etl_pipeline
+### 1. Open the Project Directory
+
+Run the commands from the project root:
+
+```bash
+cd day-46
 ```
 
-The transformation task is named:
+If you have already opened a terminal in the `day-46` directory, you can skip this step.
 
-```text
-transform_orders
+### 2. Build and Start Airflow and Spark
+
+Use **one** of the following commands.
+
+**Docker Compose:**
+
+```bash
+docker compose --profile airflow --profile spark up -d --build
 ```
 
-Airflow is used to trigger the processing task and inspect execution logs and task status.
+**Podman Compose:**
 
-The pipeline raises exceptions when processing fails, allowing Airflow to identify failed executions rather than reporting a false success.
+```bash
+podman compose --profile airflow --profile spark up -d --build
+```
 
-## Containerization
+These commands build the configured images when needed and start the services enabled by the `airflow` and `spark` profiles. If the Compose configuration requires additional supporting services, ensure they are started as well.
 
-The project uses Podman Compose to manage the containerized environment.
+### 3. Check the Services
 
-A shared named volume, `parquet_output`, is used to make the primary Parquet output available to the relevant Airflow and Spark containers.
+For Docker:
 
-Because the containers run under different user IDs, volume ownership and group permissions must be configured so Spark workers can write output and Airflow can access the results.
+```bash
+docker compose ps
+```
 
-## How to Run
+For Podman:
 
-1. Start the required services using Podman Compose.
-2. Ensure the input CSV files are available at the configured paths.
-3. Verify that the Spark containers can access the shared input and output directories.
-4. Open the Airflow UI.
-5. Locate the `orders_etl_pipeline` DAG.
-6. Trigger the DAG or rerun the `transform_orders` task.
-7. Monitor the task logs for processing progress and errors.
-8. Verify that the Parquet output has been generated successfully.
+```bash
+podman compose ps
+```
 
-The exact startup commands and Airflow UI address depend on the local Compose configuration.
+Wait until the required Airflow and Spark services are running before triggering the pipeline.
+
+### 4. Monitor Spark Master and Workers
+
+After the Spark services are running, open these URLs in your browser to monitor the Spark cluster:
+
+| Component | Monitoring URL |
+|---|---|
+| Spark Master | [http://localhost:10010](http://localhost:10010) |
+| Spark Worker 1 | [http://localhost:10011](http://localhost:10011) |
+| Spark Worker 2 | [http://localhost:10012](http://localhost:10012) |
+
+The Spark Master UI shows cluster-level information, including registered workers and running or completed applications. Each Worker UI shows information about that worker and the tasks or executors running on it.
+
+These addresses assume the corresponding container ports are published to the host using the listed ports in the Compose configuration. If a page does not open, verify the service status and port mappings with `docker compose ps` or `podman compose ps`, and inspect the relevant service logs.
+
+### 5. Open Airflow
+
+Open the Airflow UI in your browser:
+
+**URL:** [http://localhost:8080](http://localhost:8080)
+
+Use the configured local credentials:
+
+| Field | Value |
+|---|---|
+| Username | `airflow` |
+| Password | `airflow` |
+
+> These are local development credentials. Do not use default credentials for a publicly exposed or production deployment.
+
+### 5. Unpause and Trigger the DAG
+
+1. In the Airflow UI, find the DAG named `orders_etl_pipeline`.
+2. If the DAG is paused, unpause it.
+3. Trigger the DAG.
+4. Open the `transform_orders` task to monitor its status and logs.
+5. If the task fails, inspect the logs to identify the stage and error.
+
+The pipeline reads the CSV files, cleans and validates the data, joins the datasets, calculates GMV, writes Parquet output, validates the result, and copies the output to the configured Airflow data directory.
+
+### 6. Check the Parquet Output
+
+After the DAG completes successfully, check the project output directory:
+
+```text
+airflow/data/output/orders_joined_parquet/
+```
+
+The equivalent path inside the Airflow container is:
+
+```text
+/opt/airflow/data/output/orders_joined_parquet/
+```
+
+The directory should contain the generated Parquet files. The exact location on the host depends on the volume or bind-mount configuration in the Compose file.
+
+## Available Compose Profiles
+
+The repository also provides commands for starting other services independently. Run these from the project root.
+
+| Service | Command |
+|---|---|
+| Airflow | `docker compose --profile airflow up -d` |
+| Grafana | `docker compose --profile grafana up -d` |
+| PostgreSQL | `docker compose --profile postgres up -d` |
+| MySQL | `docker compose --profile mysql up -d` |
+| MySQL and PostgreSQL | `docker compose --profile db up -d` |
+| Hive | `docker compose --profile hive up -d` |
+| Kafka | `docker compose --profile kafka up -d` |
+| Spark | `docker compose --profile spark up -d` |
+
+For Podman, replace `docker compose` with `podman compose`, provided your Compose provider supports the project configuration.
+
+## Managing Services
+
+### View Running Services
+
+```bash
+docker compose ps
+```
+
+Or with Podman:
+
+```bash
+podman compose ps
+```
+
+### View Logs
+
+```bash
+docker compose logs -f
+```
+
+To inspect a specific service:
+
+```bash
+docker compose logs -f <service_name>
+```
+
+For Podman, use `podman compose logs -f` with the same arguments.
+
+### Stop Services
+
+```bash
+docker compose --profile {profile_name} down -v
+```
+
+Or:
+
+```bash
+podman compose --profile {profile_name} down -v
+```
+
+These commands stop and remove the Compose-managed containers and networks while normally preserving named volumes.
+
+> **Important:** Avoid `docker compose down -v` or `podman compose down -v` unless you intentionally want to remove the associated named volumes. Volumes may contain generated Parquet output or other persistent project data.
+
+## Troubleshooting
+
+- **A service fails to start:** inspect its logs with `docker compose logs <service_name>` or `podman compose logs <service_name>`.
+- **Input file not found:** verify the CSV paths and the volume mounts.
+- **Spark cannot write Parquet:** check ownership and write permissions on the shared output volume for the Spark workers.
+- **Airflow task fails:** open the task logs in the Airflow UI and locate the failing ETL stage.
+- **A profile does not start the expected service:** check the `profiles` and `depends_on` settings in the Compose file.
+- **Output does not appear in the host folder:** verify that `airflow/data/output` is mounted to `/opt/airflow/data/output` in the Compose configuration.
 
 ## Key Learning Outcomes
 
-- Implementing batch ETL with PySpark.
-- Cleaning and validating structured data.
-- Joining multiple datasets using a common key.
-- Applying business calculations during data transformation.
-- Writing and validating Parquet datasets.
-- Orchestrating data processing with Airflow.
-- Implementing logging and execution-time monitoring.
-- Managing shared storage permissions in a containerized environment.
+- Implement batch ETL with PySpark.
+- Clean and validate structured data.
+- Join multiple datasets using a common key.
+- Apply business calculations during data transformation.
+- Write and validate Parquet datasets.
+- Orchestrate data processing with Airflow.
+- Implement logging and execution-time monitoring.
+- Manage shared storage and permissions in containers.
 
 ## Future Improvements
 
 - Add automated data quality checks and assertions.
 - Record input and output row counts in a dedicated audit table.
-- Add configurable input and output paths.
-- Introduce retry handling and alert notifications in Airflow.
+- Make input and output paths configurable.
+- Add retry handling and alert notifications in Airflow.
 - Optimize Spark execution by reducing repeated data scans.
 - Add unit tests for transformation and validation logic.
 - Add data partitioning where appropriate for larger datasets.
 
 ## Conclusion
 
-This project demonstrates a containerized batch ETL workflow that combines PySpark for data transformation and Apache Airflow for orchestration. It processes order and order item data, validates records, calculates GMV after discounts, and produces Parquet output.
-
-The addition of stage-level logging improves pipeline observability and helps identify processing failures, execution bottlenecks, and data quality issues.
-
-
-## Getting Started
-
-### Prerequisites
-
-Make sure the following tools are installed:
-
-- [Podman](https://podman.io/) or Docker
-- Docker Compose or a compatible Compose provider
-- Git
-- Access to the project repository
-
-> This project uses Compose profiles to start individual services. The commands below use `docker compose`, as configured in the project instructions. If you use Podman, you can generally use `podman compose` with a compatible Compose provider.
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/ivansurachman/data-engineer-toolkit.git
-cd data-engineer-toolkit
-```
-
-### 2. Configure the Environment
-
-Review the project files before starting the services:
-
-- `docker-compose.yaml` or `compose.yaml`
-- `.env`, if required
-- Input data files and mounted directories
-- Service-specific configuration files
-
-Make sure the required environment variables, volume mounts, and network settings are configured.
-
-### 3. Start the Required Services
-
-Start the services needed for your workflow using the available Compose profiles.
-
-## Available Services
-
-### Airflow
-
-Start Apache Airflow for workflow orchestration and task monitoring.
-
-```bash
-docker compose --profile airflow up -d
-```
-
-### Grafana
-
-Start Grafana for monitoring and dashboard visualization.
-
-```bash
-docker compose --profile grafana up -d
-```
-
-### PostgreSQL
-
-Start PostgreSQL.
-
-```bash
-docker compose --profile postgres up -d
-```
-
-Alternatively, start both MySQL and PostgreSQL using the `db` profile:
-
-```bash
-docker compose --profile db up -d
-```
-
-### MySQL
-
-Start MySQL.
-
-```bash
-docker compose --profile mysql up -d
-```
-
-Alternatively, start both MySQL and PostgreSQL using the `db` profile:
-
-```bash
-docker compose --profile db up -d
-```
-
-### Hive
-
-Start the Hive services.
-
-```bash
-docker compose --profile hive up -d
-```
-
-### Kafka
-
-Start Kafka for event streaming and message processing.
-
-```bash
-docker compose --profile kafka up -d
-```
-
-### Spark
-
-Start the Spark services for batch data processing.
-
-```bash
-docker compose --profile spark up -d
-```
-
-> **Note:** The commands above start the services associated with each profile. Dependencies, service health, and access ports depend on the Compose configuration.
-
-## Running the PySpark ETL Pipeline
-
-This workflow processes order data using PySpark and orchestrates the execution through Airflow.
-
-### 1. Start the Required Services
-
-Start Spark:
-
-```bash
-docker compose --profile spark up -d
-```
-
-Start Airflow:
-
-```bash
-docker compose --profile airflow up -d
-```
-
-If the Compose configuration requires a database or other supporting services, start those profiles as well.
-
-### 2. Verify the Containers
-
-```bash
-docker compose ps
-```
-
-Check that the required Airflow and Spark containers are running.
-
-### 3. Verify the Input Data
-
-Make sure these files are available inside the relevant containers:
-
-```text
-/opt/airflow/data/orders.csv
-/opt/airflow/data/order_items.csv
-```
-
-### 4. Open Airflow
-
-Open the Airflow web interface using the port configured in the Compose file.
-
-Locate the DAG:
-
-```text
-orders_etl_pipeline
-```
-
-Trigger the DAG from the Airflow UI.
-
-### 5. Monitor the Transformation Task
-
-Open the `transform_orders` task and inspect its logs.
-
-The logs provide information about:
-
-- Reading input CSV files
-- Cleaning and validating records
-- Standardizing data types
-- Joining the datasets
-- Calculating GMV
-- Writing Parquet output
-- Validating the output
-- Copying output files
-- Errors and execution duration
-
-### 6. Verify the Output
-
-The primary output directory is:
-
-```text
-/opt/airflow/parquet_output/orders_joined_parquet
-```
-
-The secondary output directory is:
-
-```text
-/opt/airflow/data/output/orders_joined_parquet
-```
-
-The output is stored in Parquet format and typically includes part files and a `_SUCCESS` marker.
-
-## Managing Services
-
-### View Running Containers
-
-```bash
-docker compose ps
-```
-
-### View Service Logs
-
-```bash
-docker compose logs -f
-```
-
-To inspect a specific service, use its service name from the Compose configuration:
-
-```bash
-docker compose logs -f <service_name>
-```
-
-### Stop Services
-
-Stop and remove containers and networks while preserving named volumes:
-
-```bash
-docker compose down
-```
-
-> Avoid `docker compose down -v` unless you intentionally want to remove the associated named volumes. Volumes may contain generated Parquet data or other persistent project data.
-
-## Troubleshooting
-
-- **Service fails to start:** inspect its logs with `docker compose logs <service_name>`.
-- **Input file not found:** verify the file paths and volume mounts.
-- **Spark cannot write Parquet:** verify that the Spark worker has write permission on the output volume.
-- **Airflow task fails:** inspect the task logs in the Airflow UI and identify the failing ETL stage.
-- **Profile does not start the expected service:** check the `profiles` and `depends_on` settings in the Compose file.
-
+This project demonstrates a containerized batch ETL workflow that combines PySpark for data transformation and Apache Airflow for orchestration. It processes order and order-item data, validates records, calculates GMV after discounts, and produces Parquet output. Stage-level logging improves observability and helps identify processing failures, execution bottlenecks, and data quality issues.
