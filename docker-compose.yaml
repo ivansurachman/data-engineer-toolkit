@@ -6,6 +6,7 @@ x-airflow-common:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/data:/opt/airflow/data
     - ./airflow/plugins:/opt/airflow/plugins
+    - ./spark/scripts:/spark/scripts:ro
   user: "${AIRFLOW_UID:-50000}:0"
   env_file:
     - ./airflow/.env
