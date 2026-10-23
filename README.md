@@ -387,7 +387,9 @@ This project demonstrates a containerized batch ETL workflow that combines PySpa
 
 
 ## Troubleshoting
+
 if the dag fails to run, you can try running the following command to initialize Parquet permissions in the container:
+
 ```bash
 podman compose run --rm --no-deps --user 0:0 init-parquet-permissions
 ```
