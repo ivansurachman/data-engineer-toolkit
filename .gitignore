@@ -1,9 +1,5 @@
-airflow/dags/
-airflow/data/
-airflow/plugins/
-spark/scripts/
-kafka/scripts/
-db/sql/
+airflow/dags/__pycache__/
+airflow/data/output/
 .venv/
 dataset_generator/incoming/
 struktur.txt
