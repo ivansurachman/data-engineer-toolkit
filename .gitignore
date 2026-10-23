@@ -4,3 +4,5 @@ airflow/plugins/
 spark/scripts/
 kafka/scripts/
 db/sql/
+.venv/
+dataset_generator/incoming/
