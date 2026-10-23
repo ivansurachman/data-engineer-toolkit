@@ -280,11 +280,9 @@ Make sure the following tools are installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd <YOUR_PROJECT_DIRECTORY>
+git clone https://github.com/ivansurachman/data-engineer-toolkit.git
+cd data-engineer-toolkit
 ```
-
-Replace the placeholders with your actual repository URL and project directory.
 
 ### 2. Configure the Environment
 
