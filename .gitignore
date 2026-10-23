@@ -1,16 +1,7 @@
-<<<<<<< HEAD
 airflow/dags/__pycache__/
-airflow/data/output/
 .venv/
 dataset_generator/incoming/
 struktur.txt
-=======
-airflow/dags/
-airflow/data/
-airflow/plugins/
-spark/scripts/
-kafka/scripts/
-db/sql/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -232,4 +223,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
->>>>>>> 7c39aa17d9d97f9a3f42b0cdffe862c50c9125e8
