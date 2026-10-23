@@ -2,12 +2,17 @@
 x-airflow-common:
   &airflow-common
   build: ./airflow/.
+  environment:
+    JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/data:/opt/airflow/data
     - ./airflow/plugins:/opt/airflow/plugins
     - ./spark/scripts:/spark/scripts:ro
+    - parquet_output:/opt/airflow/parquet_output
   user: "${AIRFLOW_UID:-50000}:0"
+  group_add:
+    - "2000"
   env_file:
     - ./airflow/.env
   depends_on:
@@ -190,10 +195,30 @@ services:
       - hive
 
 # ================================ SPARK ================================
+  init-parquet-permissions:
+    image: alpine:3.22
+    user: "0:0"
+    command:
+      - sh
+      - -c
+      - |
+        chown -R 1001:2000 /opt/airflow/parquet_output
+        chmod -R g+rwX /opt/airflow/parquet_output
+        find /opt/airflow/parquet_output -type d -exec chmod g+s {} \;
+    volumes:
+      - parquet_output:/opt/airflow/parquet_output
+    profiles:
+      - spark
+
   spark-master:
     build: ./spark/.
     container_name: spark-master
     hostname: spark
+    group_add:
+     - "2000"
+    depends_on:
+      init-parquet-permissions:
+        condition: service_completed_successfully
     env_file:
       - ./spark/.env
     environment:
@@ -206,12 +231,18 @@ services:
     volumes:
       - ./spark/:/spark
       - ./airflow/data/:/opt/airflow/data
+      - parquet_output:/opt/airflow/parquet_output
     profiles:
       - spark
 
   spark-worker-1:
     build: ./spark/.
     container_name: spark-worker-1
+    group_add:
+      - "2000"
+    depends_on:
+      init-parquet-permissions:
+        condition: service_completed_successfully
     ports:
       - 10011:8081
     env_file:
@@ -222,12 +253,18 @@ services:
     volumes:
       - ./spark/:/spark
       - ./airflow/data/:/opt/airflow/data
+      - parquet_output:/opt/airflow/parquet_output
     profiles:
       - spark
 
   spark-worker-2:
     build: ./spark/.
     container_name: spark-worker-2
+    group_add:
+      - "2000"
+    depends_on:
+      init-parquet-permissions:
+        condition: service_completed_successfully
     ports:
       - 10012:8081
     env_file:
@@ -238,6 +275,7 @@ services:
     volumes:
       - ./spark/:/spark
       - ./airflow/data/:/opt/airflow/data
+      - parquet_output:/opt/airflow/parquet_output
     profiles:
       - spark
 
@@ -387,3 +425,6 @@ services:
       - "9010:8080"
     profiles:
       - kafka
+
+volumes:
+  parquet_output:
