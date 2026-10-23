@@ -6,3 +6,4 @@ kafka/scripts/
 db/sql/
 .venv/
 dataset_generator/incoming/
+struktur.txt
