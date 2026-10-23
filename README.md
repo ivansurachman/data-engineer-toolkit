@@ -384,3 +384,10 @@ These commands stop and remove the Compose-managed containers and networks while
 ## Conclusion
 
 This project demonstrates a containerized batch ETL workflow that combines PySpark for data transformation and Apache Airflow for orchestration. It processes order and order-item data, validates records, calculates GMV after discounts, and produces Parquet output. Stage-level logging improves observability and helps identify processing failures, execution bottlenecks, and data quality issues.
+
+
+## Troubleshoting
+if the dag fails to run, you can try running the following command to initialize Parquet permissions in the container:
+```bash
+podman compose run --rm --no-deps --user 0:0 init-parquet-permissions
+```
